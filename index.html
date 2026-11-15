@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full bg-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quản Lý - Đồng Giá</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: { primary: '#4F46E5', success: '#10B981', warning: '#F59E0B', danger: '#EF4444' } } } }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input, select, textarea { font-size: 16px !important; }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden text-slate-800 font-sans">
+
+    <div id="global-loading" class="loading-overlay">
+        <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <p class="mt-4 text-sm font-bold text-slate-600 animate-pulse">Đang đồng bộ dữ liệu...</p>
+    </div>
+
+    <header class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shrink-0 shadow-md z-20">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shrink-0">
+                <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-black tracking-wide leading-tight uppercase text-indigo-400">QUẢN LÝ TIỆM GIÀY</h1>
+                <div class="text-[10px] text-slate-400 font-medium">Bộ đếm & Chỉnh sửa đơn Đồng Giá</div>
+            </div>
+        </div>
+        <button onclick="fetchDataFromServer()" class="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition shrink-0">
+            <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+        </button>
+    </header>
+
+    <div id="toast-container" class="fixed top-20 right-4 left-4 z-50 flex flex-col space-y-2 pointer-events-none items-end"></div>
+
+    <main class="flex-1 overflow-y-auto bg-slate-100 relative pb-24 no-scrollbar">
+        <section class="p-3.5 space-y-3.5 max-w-lg mx-auto block">
+            
+            <!-- BỘ LỌC NGÀY THÁNG -->
+            <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-black text-slate-800 uppercase flex items-center space-x-1.5"><i data-lucide="calendar-range" class="w-4 h-4 text-indigo-600"></i><span>Bộ Đếm Thời Gian</span></h2>
+                    <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200">
+                        <button type="button" id="mode-btn-day" onclick="setFilterMode('day')" class="px-3 py-1 rounded-lg bg-white text-indigo-600 shadow-sm transition">Ngày</button>
+                        <button type="button" id="mode-btn-month" onclick="setFilterMode('month')" class="px-3 py-1 rounded-lg text-slate-500 transition">Tháng</button>
+                    </div>
+                </div>
+                <!-- Ngày -->
+                <div id="filter-day-wrap" class="flex items-center space-x-2">
+                    <button type="button" onclick="shiftDate(-1)" class="p-2.5 bg-slate-100 rounded-xl text-slate-700 active:scale-95"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                    <input type="date" id="input-filter-date" onchange="renderStatsAndHistory()" class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-center text-slate-800 focus:outline-none">
+                    <button type="button" onclick="shiftDate(1)" class="p-2.5 bg-slate-100 rounded-xl text-slate-700 active:scale-95"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                    <button type="button" onclick="setToday()" class="px-3 py-2 bg-indigo-50 text-indigo-600 font-bold text-xs rounded-xl shrink-0">Hôm nay</button>
+                </div>
+                <!-- Tháng -->
+                <div id="filter-month-wrap" class="hidden flex items-center space-x-2">
+                    <button type="button" onclick="shiftMonth(-1)" class="p-2.5 bg-slate-100 rounded-xl text-slate-700 active:scale-95"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                    <input type="month" id="input-filter-month" onchange="renderStatsAndHistory()" class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-center text-slate-800 focus:outline-none">
+                    <button type="button" onclick="shiftMonth(1)" class="p-2.5 bg-slate-100 rounded-xl text-slate-700 active:scale-95"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                    <button type="button" onclick="setThisMonth()" class="px-3 py-2 bg-indigo-50 text-indigo-600 font-bold text-xs rounded-xl shrink-0">Tháng này</button>
+                </div>
+            </div>
+
+            <!-- TỔNG DOANH THU & SỐ ĐÔI -->
+            <div class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-900 text-white rounded-2xl p-4 shadow-lg space-y-3">
+                <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div>
+                        <span id="stat-period-label" class="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">Doanh thu</span>
+                        <div id="stat-total-revenue" class="text-2xl font-black text-emerald-400 mt-0.5">0đ</div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">Tổng số giày</span>
+                        <div class="text-2xl font-black text-white mt-0.5"><span id="stat-total-shoes">0</span> <span class="text-xs font-bold text-slate-300">đôi</span></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-white/10 rounded-xl p-2.5 flex justify-between"><span class="text-slate-300">Tiền mặt:</span><span id="stat-cash" class="font-black text-white">0đ</span></div>
+                    <div class="bg-white/10 rounded-xl p-2.5 flex justify-between"><span class="text-slate-300">CK:</span><span id="stat-bank" class="font-black text-cyan-300">0đ</span></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2.5 pt-1">
+                    <div class="bg-pink-500/20 border border-pink-400/30 rounded-xl p-3 flex justify-between">
+                        <div><div class="text-[10px] font-bold uppercase text-pink-200">Giày Nữ & Kid</div><div class="text-xl font-black text-pink-300 mt-0.5"><span id="stat-nu-count">0</span> đôi</div></div>
+                        <div class="w-9 h-9 rounded-lg bg-pink-500/30 flex items-center justify-center text-pink-200 font-black text-xs">NỮ</div>
+                    </div>
+                    <div class="bg-blue-500/20 border border-blue-400/30 rounded-xl p-3 flex justify-between">
+                        <div><div class="text-[10px] font-bold uppercase text-blue-200">Giày Nam (40+)</div><div class="text-xl font-black text-blue-300 mt-0.5"><span id="stat-nam-count">0</span> đôi</div></div>
+                        <div class="w-9 h-9 rounded-lg bg-blue-500/30 flex items-center justify-center text-blue-200 font-black text-xs">NAM</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BẢNG ĐẾM CHI TIẾT TỪNG MỨC GIÁ -->
+            <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80">
+                <h3 class="text-xs font-black text-slate-800 uppercase mb-2.5 flex items-center space-x-1.5"><i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-600"></i><span>Chi Tiết Số Lượng</span></h3>
+                <div id="stat-tier-breakdown" class="grid grid-cols-2 gap-2 text-xs"></div>
+            </div>
+
+            <!-- DANH SÁCH LỊCH SỬ ĐƠN HÀNG -->
+            <div class="space-y-2.5">
+                <div class="flex items-center justify-between px-1">
+                    <h3 class="text-xs font-black text-slate-700 uppercase">Lịch sử đơn (<span id="stat-order-count">0</span> đơn)</h3>
+                    <button onclick="openAddModal()" class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center space-x-1">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i><span>Thêm thủ công</span>
+                    </button>
+                </div>
+                <div id="history-list" class="space-y-2.5 pb-8"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- IMAGE LIGHTBOX -->
+    <div id="lightbox-modal" class="fixed inset-0 bg-black/95 z-50 items-center justify-center p-4 hidden flex-col" onclick="closeImageZoom()">
+        <img id="lightbox-image" src="" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain">
+        <button class="absolute top-4 right-4 bg-white/20 text-white p-2.5 rounded-full hover:bg-white/40 transition"><i data-lucide="x" class="w-6 h-6"></i></button>
+    </div>
+
+    <!-- MODAL THÊM / SỬA ĐƠN HÀNG (TÙY Ý) -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button onclick="closeEditModal()" class="absolute top-3 right-3 p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h3 id="edit-modal-title" class="text-base font-black text-indigo-700 mb-4 uppercase tracking-wide">Chỉnh sửa đơn hàng</h3>
+            
+            <form id="form-edit" onsubmit="submitEditOrder(event)" class="space-y-3">
+                <input type="hidden" id="edit-id">
+                <input type="hidden" id="edit-urlGiay">
+                <input type="hidden" id="edit-urlBill">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tổng tiền (VNĐ)</label>
+                        <input type="number" id="edit-tongtien" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Thanh toán</label>
+                        <select id="edit-hinhthuc" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none">
+                            <option value="Tiền mặt">Tiền mặt</option>
+                            <option value="Chuyển khoản">Chuyển khoản</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 text-pink-600">Số đôi Nữ / Kid</label>
+                        <input type="number" id="edit-donu" required min="0" class="w-full px-3 py-2 bg-pink-50 border border-pink-200 rounded-xl text-sm font-black text-pink-600 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 text-blue-600">Số đôi Nam (40+)</label>
+                        <input type="number" id="edit-donam" required min="0" class="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm font-black text-blue-600 focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ghi chú (Tùy chọn)</label>
+                    <input type="text" id="edit-ghichu" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none">
+                </div>
+                
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tóm tắt (Tùy chọn)</label>
+                    <input type="text" id="edit-tomtat" placeholder="VD: 1x Size 35 CV, 2x Giá khác" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeEditModal()" class="py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Hủy bỏ</button>
+                    <button type="submit" id="btn-submit-edit" class="py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-md">Lưu Thay Đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FIREBASE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        const firebaseConfig = { apiKey: "AIzaSyAWRBa3-QI8QG6kfP2J_qzgbpDz2_GJPp8", authDomain: "doanhthu-73ade.firebaseapp.com", projectId: "doanhthu-73ade", storageBucket: "doanhthu-73ade.firebasestorage.app", messagingSenderId: "449682329782", appId: "1:449682329782:web:94974d346a4b49f8651617" };
+        const app = initializeApp(firebaseConfig);
+        window.firebaseDb = getFirestore(app);
+        window.fbAddDoc = addDoc; window.fbCollection = collection; window.fbGetDocs = getDocs; window.fbUpdateDoc = updateDoc; window.fbDeleteDoc = deleteDoc; window.fbDoc = doc;
+        if(window.onFirebaseReady) window.onFirebaseReady();
+    </script>
+
+    <script>
+        const APP_CONFIG = { firestoreCollection: 'don_ban_dong_gia' };
+        const SHOE_TIERS = [
+            { id: 's35_kid', label: 'Giày Thường ≤35', priceShort: '180k', gender: 'nu' },
+            { id: 's35_cv', label: 'Converse / Vans ≤35', priceShort: '250k', gender: 'nu' },
+            { id: 's36_thuong', label: 'Giày Thường 36-37', priceShort: '230k', gender: 'nu' },
+            { id: 's36_cv', label: 'Converse / Vans 36-37', priceShort: '260k', gender: 'nu' },
+            { id: 's38_thuong', label: 'Giày Thường 38-39', priceShort: '260k', gender: 'nu' },
+            { id: 's38_cv', label: 'Converse / Vans 38-39', priceShort: '320k', gender: 'nu' },
+            { id: 's40_350', label: 'Giày Nam 40+ (350k)', priceShort: '350k', gender: 'nam' },
+            { id: 's40_380', label: 'Giày Nam 40+ (380k)', priceShort: '380k', gender: 'nam' }
+        ];
+
+        let filterMode = 'day';
+        let ordersData = [];
+
+        window.onload = function() {
+            initDateInputs(); lucide.createIcons();
+            if(window.firebaseDb) fetchDataFromServer(); else window.onFirebaseReady = fetchDataFromServer;
+        };
+
+        function initDateInputs() {
+            const now = new Date(); const y = now.getFullYear(); const m = String(now.getMonth() + 1).padStart(2, '0'); const d = String(now.getDate()).padStart(2, '0');
+            document.getElementById('input-filter-date').value = `${y}-${m}-${d}`; document.getElementById('input-filter-month').value = `${y}-${m}`;
+        }
+
+        async function fetchDataFromServer() {
+            if (!window.firebaseDb) return;
+            document.getElementById('global-loading').style.display = 'flex';
+            try {
+                ordersData = [];
+                const snap = await window.fbGetDocs(window.fbCollection(window.firebaseDb, APP_CONFIG.firestoreCollection));
+                snap.forEach(docSnap => {
+                    const d = docSnap.data();
+                    ordersData.push({
+                        id: docSnap.id, khachHang: d.khachHang || "Khách vãng lai", ghiChu: d.ghiChu || "",
+                        items: Array.isArray(d.items) ? d.items : [], tomTat: d.tomTat || "", tongDoi: Number(d.tongDoi) || 0,
+                        soDoiNu: Number(d.soDoiNu) || 0, soDoiNam: Number(d.soDoiNam) || 0, tongTien: Number(d.tongTien) || 0,
+                        hinhThuc: d.hinhThuc || "Tiền mặt", urlAnhGiay: d.urlAnhGiay || "", urlAnhBill: d.urlAnhBill || "", thoiGian: d.thoiGian || new Date().toISOString()
+                    });
+                });
+                ordersData.sort((a, b) => new Date(b.thoiGian) - new Date(a.thoiGian));
+                renderStatsAndHistory();
+            } catch (err) { showToast("Lỗi đồng bộ", "danger"); } 
+            finally { document.getElementById('global-loading').style.display = 'none'; }
+        }
+
+        function setFilterMode(mode) {
+            filterMode = mode;
+            document.getElementById('mode-btn-day').className = mode === 'day' ? "px-3 py-1 rounded-lg bg-white text-indigo-600 shadow-sm transition" : "px-3 py-1 rounded-lg text-slate-500 transition";
+            document.getElementById('mode-btn-month').className = mode === 'month' ? "px-3 py-1 rounded-lg bg-white text-indigo-600 shadow-sm transition" : "px-3 py-1 rounded-lg text-slate-500 transition";
+            document.getElementById('filter-day-wrap').classList.toggle('hidden', mode !== 'day');
+            document.getElementById('filter-month-wrap').classList.toggle('hidden', mode !== 'month');
+            renderStatsAndHistory();
+        }
+        function shiftDate(days) { const inp = document.getElementById('input-filter-date'); const d = inp.value ? new Date(inp.value) : new Date(); d.setDate(d.getDate() + days); inp.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; renderStatsAndHistory(); }
+        function shiftMonth(months) { const inp = document.getElementById('input-filter-month'); const p = (inp.value||'2025-01').split('-'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1+months, 1); inp.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; renderStatsAndHistory(); }
+        function setToday() { initDateInputs(); renderStatsAndHistory(); }
+        function setThisMonth() { initDateInputs(); renderStatsAndHistory(); }
+
+        function renderStatsAndHistory() {
+            const sd = document.getElementById('input-filter-date').value; const sm = document.getElementById('input-filter-month').value;
+            const filtered = ordersData.filter(o => {
+                const d = new Date(o.thoiGian); const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; const ymd = `${ym}-${String(d.getDate()).padStart(2,'0')}`;
+                return filterMode === 'day' ? ymd === sd : ym === sm;
+            });
+
+            const lbl = document.getElementById('stat-period-label');
+            if(filterMode === 'day' && sd) { const p = sd.split('-'); lbl.innerText = `Doanh thu ngày ${p[2]}/${p[1]}/${p[0]}`; }
+            else if(sm) { const p = sm.split('-'); lbl.innerText = `Doanh thu tháng ${p[1]}/${p[0]}`; }
+
+            let tRev = 0, cRev = 0, bRev = 0, tShoes = 0, tNu = 0, tNam = 0; let tCounts = { 'custom_error': 0 }; SHOE_TIERS.forEach(t => tCounts[t.id] = 0);
+            filtered.forEach(o => {
+                tRev += o.tongTien; if(o.hinhThuc==='Chuyển khoản') bRev+=o.tongTien; else cRev+=o.tongTien;
+                tShoes += o.tongDoi; tNu += o.soDoiNu; tNam += o.soDoiNam;
+                if(Array.isArray(o.items)) o.items.forEach(it => { if(tCounts[it.tierId]!==undefined) tCounts[it.tierId]+=(Number(it.qty)||0); else tCounts['custom_error']+=(Number(it.qty)||0); });
+            });
+
+            document.getElementById('stat-total-revenue').innerText = formatMoney(tRev); document.getElementById('stat-total-shoes').innerText = tShoes;
+            document.getElementById('stat-cash').innerText = formatMoney(cRev); document.getElementById('stat-bank').innerText = formatMoney(bRev);
+            document.getElementById('stat-nu-count').innerText = tNu; document.getElementById('stat-nam-count').innerText = tNam; document.getElementById('stat-order-count').innerText = filtered.length;
+
+            const bDown = document.getElementById('stat-tier-breakdown'); bDown.innerHTML = '';
+            SHOE_TIERS.forEach(t => { const c = tCounts[t.id]||0; bDown.innerHTML += `<div class="p-2.5 rounded-xl border flex justify-between ${c>0?'bg-indigo-50/60 border-indigo-200':'bg-slate-50 border-slate-100 opacity-65'}"><div class="pr-1"><div class="font-bold text-slate-800 text-[11px]">${t.label}</div><div class="text-[10px] font-bold ${t.gender==='nam'?'text-blue-600':'text-pink-600'}">${t.priceShort}</div></div><span class="px-2 py-1 rounded-lg font-black text-xs ${c>0?'bg-indigo-600 text-white':'bg-slate-200 text-slate-500'}">${c}</span></div>`; });
+            const ec = tCounts['custom_error']||0; bDown.innerHTML += `<div class="col-span-2 p-2.5 rounded-xl border flex justify-between ${ec>0?'bg-amber-50 border-amber-200':'bg-slate-50 border-slate-100 opacity-65'}"><div class="font-bold text-slate-800 text-[11px]">🏷️ Giày lỗi / Giá khác</div><span class="px-2.5 py-1 rounded-lg font-black text-xs ${ec>0?'bg-amber-500 text-white':'bg-slate-200 text-slate-500'}">${ec}</span></div>`;
+
+            const listEl = document.getElementById('history-list'); listEl.innerHTML = '';
+            if(filtered.length===0) { listEl.innerHTML = `<div class="bg-white rounded-2xl p-8 text-center text-slate-400 text-xs font-medium border border-slate-200/60">Không có đơn nào.</div>`; return; }
+
+            filtered.forEach(o => {
+                let imgsHtml = '';
+                if(o.urlAnhGiay || o.urlAnhBill) {
+                    imgsHtml = `<div class="flex space-x-2 pt-1">`;
+                    if(o.urlAnhGiay) imgsHtml += `<div onclick="openImageZoom('${o.urlAnhGiay}')" class="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 cursor-pointer"><img src="${o.urlAnhGiay}" class="w-full h-full object-cover"><span class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold text-center py-0.5">Giày</span></div>`;
+                    if(o.urlAnhBill) imgsHtml += `<div onclick="openImageZoom('${o.urlAnhBill}')" class="relative w-16 h-16 rounded-xl overflow-hidden border border-emerald-200 cursor-pointer"><img src="${o.urlAnhBill}" class="w-full h-full object-cover"><span class="absolute bottom-0 inset-x-0 bg-emerald-900/70 text-white text-[8px] font-bold text-center py-0.5">Bill</span></div>`;
+                    imgsHtml += `</div>`;
+                }
+
+                listEl.innerHTML += `
+                    <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80 space-y-2 relative">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="flex flex-wrap items-center gap-1.5"><span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${o.hinhThuc==='Chuyển khoản'?'bg-cyan-50 text-cyan-700':'bg-emerald-50 text-emerald-700'}">${o.hinhThuc}</span>${o.soDoiNu>0?`<span class="px-2 py-0.5 rounded-md text-[10px] font-black bg-pink-50 text-pink-600">Nữ: ${o.soDoiNu}</span>`:''}${o.soDoiNam>0?`<span class="px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-blue-600">Nam: ${o.soDoiNam}</span>`:''}</div>
+                                <div class="text-sm font-black text-slate-800 mt-1.5">${o.tomTat || 'Đơn thủ công'}</div>
+                            </div>
+                            <div class="text-right shrink-0 pl-2">
+                                <div class="text-base font-black text-indigo-600">${formatMoney(o.tongTien)}</div>
+                                <div class="text-[10px] font-semibold text-slate-400">${formatDate(o.thoiGian)}</div>
+                            </div>
+                        </div>
+                        ${o.ghiChu?`<div class="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200/70 px-2.5 py-1 rounded-lg">📝 ${o.ghiChu}</div>`:''}
+                        <div class="flex items-center justify-between pt-1">
+                            ${imgsHtml||'<div></div>'}
+                            <div class="flex space-x-1.5 ml-auto">
+                                <button onclick="openEditModal('${o.id}')" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg hover:bg-indigo-100 transition flex items-center"><i data-lucide="edit-3" class="w-3.5 h-3.5 mr-1"></i>Sửa</button>
+                                <button onclick="deleteOrder('${o.id}')" class="text-[11px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-lg hover:bg-red-100 transition flex items-center"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            lucide.createIcons();
+        }
+
+        // --- CRUD ĐƠN HÀNG THỦ CÔNG ---
+        function openAddModal() {
+            document.getElementById('edit-modal-title').innerText = "Thêm Đơn Thủ Công";
+            document.getElementById('edit-id').value = "";
+            document.getElementById('edit-tongtien').value = "";
+            document.getElementById('edit-donu').value = 0; document.getElementById('edit-donam').value = 0;
+            document.getElementById('edit-hinhthuc').value = "Tiền mặt";
+            document.getElementById('edit-ghichu').value = ""; document.getElementById('edit-tomtat').value = "Đơn thêm thủ công";
+            document.getElementById('edit-modal').classList.remove('hidden'); document.getElementById('edit-modal').classList.add('flex');
+        }
+
+        function openEditModal(id) {
+            const o = ordersData.find(x => x.id === id); if(!o) return;
+            document.getElementById('edit-modal-title').innerText = "Chỉnh Sửa Đơn Hàng";
+            document.getElementById('edit-id').value = o.id;
+            document.getElementById('edit-tongtien').value = o.tongTien;
+            document.getElementById('edit-donu').value = o.soDoiNu; document.getElementById('edit-donam').value = o.soDoiNam;
+            document.getElementById('edit-hinhthuc').value = o.hinhThuc;
+            document.getElementById('edit-ghichu').value = o.ghiChu; document.getElementById('edit-tomtat').value = o.tomTat;
+            document.getElementById('edit-urlGiay').value = o.urlAnhGiay || ""; document.getElementById('edit-urlBill').value = o.urlAnhBill || "";
+            document.getElementById('edit-modal').classList.remove('hidden'); document.getElementById('edit-modal').classList.add('flex');
+        }
+
+        function closeEditModal() { document.getElementById('edit-modal').classList.add('hidden'); document.getElementById('edit-modal').classList.remove('flex'); }
+
+        async function submitEditOrder(e) {
+            e.preventDefault(); if(!window.firebaseDb) return;
+            const id = document.getElementById('edit-id').value;
+            const payload = {
+                tongTien: parseInt(document.getElementById('edit-tongtien').value)||0,
+                soDoiNu: parseInt(document.getElementById('edit-donu').value)||0,
+                soDoiNam: parseInt(document.getElementById('edit-donam').value)||0,
+                hinhThuc: document.getElementById('edit-hinhthuc').value,
+                ghiChu: document.getElementById('edit-ghichu').value,
+                tomTat: document.getElementById('edit-tomtat').value,
+                tongDoi: (parseInt(document.getElementById('edit-donu').value)||0) + (parseInt(document.getElementById('edit-donam').value)||0)
+            };
+
+            const btn = document.getElementById('btn-submit-edit'); btn.disabled = true; btn.innerText = "Đang lưu...";
+            try {
+                if(id) {
+                    await window.fbUpdateDoc(window.fbDoc(window.firebaseDb, APP_CONFIG.firestoreCollection, id), payload);
+                    showToast("Đã cập nhật đơn", "success");
+                } else {
+                    payload.thoiGian = new Date().toISOString(); payload.khachHang = "Khách vãng lai"; payload.items = []; payload.urlAnhGiay = ""; payload.urlAnhBill = "";
+                    await window.fbAddDoc(window.fbCollection(window.firebaseDb, APP_CONFIG.firestoreCollection), payload);
+                    showToast("Đã thêm đơn mới", "success");
+                }
+                closeEditModal(); await fetchDataFromServer();
+            } catch(err) { showToast("Lỗi khi lưu", "danger"); } finally { btn.disabled = false; btn.innerText = "Lưu Thay Đổi"; }
+        }
+
+        async function deleteOrder(id) {
+            if(!confirm("Bạn có chắc chắn muốn xóa đơn hàng này? Không thể hoàn tác.")) return;
+            document.getElementById('global-loading').style.display = 'flex';
+            try {
+                await window.fbDeleteDoc(window.fbDoc(window.firebaseDb, APP_CONFIG.firestoreCollection, id));
+                showToast("Đã xóa đơn", "success"); await fetchDataFromServer();
+            } catch(err) { showToast("Lỗi xóa đơn", "danger"); document.getElementById('global-loading').style.display = 'none'; }
+        }
+
+        function formatMoney(a) { return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(a || 0); }
+        function formatDate(iso) { if(!iso) return ""; const d = new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} - ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }
+        function openImageZoom(src) { document.getElementById('lightbox-image').src = src; document.getElementById('lightbox-modal').classList.remove('hidden'); document.getElementById('lightbox-modal').classList.add('flex'); }
+        function closeImageZoom() { document.getElementById('lightbox-image').src = ""; document.getElementById('lightbox-modal').classList.add('hidden'); document.getElementById('lightbox-modal').classList.remove('flex'); }
+        function showToast(msg, type = 'success') {
+            const c = document.getElementById('toast-container'); const t = document.createElement('div');
+            t.className = `${type==='danger'?'bg-red-600':(type==='warning'?'bg-amber-500':'bg-emerald-600')} text-white flex items-center space-x-2 px-4 py-3 rounded-xl shadow-lg text-xs font-bold transform translate-y-2 opacity-0 transition duration-300`;
+            t.innerHTML = `<i data-lucide="${type==='danger'?'alert-circle':(type==='warning'?'info':'check-circle-2')}" class="w-4 h-4 shrink-0"></i><span>${msg}</span>`;
+            c.appendChild(t); lucide.createIcons(); setTimeout(() => t.classList.remove('translate-y-2', 'opacity-0'), 30);
+            setTimeout(() => { t.classList.add('translate-y-2', 'opacity-0'); setTimeout(() => t.remove(), 300); }, 2400);
+        }
+    </script>
+</body>
+</html>
