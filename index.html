@@ -97,6 +97,28 @@
                 </div>
             </div>
 
+            <!-- THỐNG KÊ LỢI NHUẬN (CHỈ NỮ) -->
+            <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-pink-200/80 space-y-3">
+                <h3 class="text-xs font-black text-pink-600 uppercase flex items-center space-x-1.5">
+                    <i data-lucide="piggy-bank" class="w-4 h-4"></i>
+                    <span>Lãi & Vốn (Chỉ tính Giày Nữ & Kid)</span>
+                </h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-pink-50 rounded-xl p-2.5 border border-pink-100">
+                        <div class="text-[10px] font-bold text-pink-500 uppercase">Doanh thu (Nữ)</div>
+                        <div id="stat-rev-nu" class="text-lg font-black text-pink-700 mt-0.5">0đ</div>
+                    </div>
+                    <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-200">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase">Vốn (120k/đôi)</div>
+                        <div id="stat-capital-nu" class="text-lg font-black text-slate-700 mt-0.5">0đ</div>
+                    </div>
+                </div>
+                <div class="bg-emerald-50 rounded-xl p-3 border border-emerald-200 flex justify-between items-center shadow-inner">
+                    <div class="text-[11px] font-bold text-emerald-700 uppercase">Tiền Lãi (Nữ)</div>
+                    <div id="stat-profit-nu" class="text-xl font-black text-emerald-600">0đ</div>
+                </div>
+            </div>
+
             <!-- BẢNG ĐẾM CHI TIẾT TỪNG MỨC GIÁ -->
             <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80">
                 <h3 class="text-xs font-black text-slate-800 uppercase mb-2.5 flex items-center space-x-1.5"><i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-600"></i><span>Chi Tiết Số Lượng</span></h3>
@@ -259,15 +281,28 @@
             else if(sm) { const p = sm.split('-'); lbl.innerText = `Doanh thu tháng ${p[1]}/${p[0]}`; }
 
             let tRev = 0, cRev = 0, bRev = 0, tShoes = 0, tNu = 0, tNam = 0; let tCounts = { 'custom_error': 0 }; SHOE_TIERS.forEach(t => tCounts[t.id] = 0);
+            let tRevNu = 0;
             filtered.forEach(o => {
                 tRev += o.tongTien; if(o.hinhThuc==='Chuyển khoản') bRev+=o.tongTien; else cRev+=o.tongTien;
                 tShoes += o.tongDoi; tNu += o.soDoiNu; tNam += o.soDoiNam;
-                if(Array.isArray(o.items)) o.items.forEach(it => { if(tCounts[it.tierId]!==undefined) tCounts[it.tierId]+=(Number(it.qty)||0); else tCounts['custom_error']+=(Number(it.qty)||0); });
+                if(Array.isArray(o.items) && o.items.length > 0) {
+                    o.items.forEach(it => { 
+                        if(tCounts[it.tierId]!==undefined) tCounts[it.tierId]+=(Number(it.qty)||0); else tCounts['custom_error']+=(Number(it.qty)||0); 
+                        if(it.gender === 'nu') tRevNu += (Number(it.price)||0) * (Number(it.qty)||0);
+                    });
+                } else {
+                    if (o.tongDoi > 0) tRevNu += Math.round(o.tongTien * (o.soDoiNu / o.tongDoi));
+                }
             });
 
             document.getElementById('stat-total-revenue').innerText = formatMoney(tRev); document.getElementById('stat-total-shoes').innerText = tShoes;
             document.getElementById('stat-cash').innerText = formatMoney(cRev); document.getElementById('stat-bank').innerText = formatMoney(bRev);
             document.getElementById('stat-nu-count').innerText = tNu; document.getElementById('stat-nam-count').innerText = tNam; document.getElementById('stat-order-count').innerText = filtered.length;
+            
+            document.getElementById('stat-rev-nu').innerText = formatMoney(tRevNu);
+            let capitalNu = tNu * 120000;
+            document.getElementById('stat-capital-nu').innerText = formatMoney(capitalNu);
+            document.getElementById('stat-profit-nu').innerText = formatMoney(tRevNu - capitalNu);
 
             const bDown = document.getElementById('stat-tier-breakdown'); bDown.innerHTML = '';
             SHOE_TIERS.forEach(t => { const c = tCounts[t.id]||0; bDown.innerHTML += `<div class="p-2.5 rounded-xl border flex justify-between ${c>0?'bg-indigo-50/60 border-indigo-200':'bg-slate-50 border-slate-100 opacity-65'}"><div class="pr-1"><div class="font-bold text-slate-800 text-[11px]">${t.label}</div><div class="text-[10px] font-bold ${t.gender==='nam'?'text-blue-600':'text-pink-600'}">${t.priceShort}</div></div><span class="px-2 py-1 rounded-lg font-black text-xs ${c>0?'bg-indigo-600 text-white':'bg-slate-200 text-slate-500'}">${c}</span></div>`; });
